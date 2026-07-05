@@ -497,6 +497,24 @@ function App() {
 
   const renderDashboard = () => (
     <div style={styles.container}>
+      {/* HEADER WITH LOGO */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          marginBottom: "20px",
+        }}
+      >
+        <img
+          src="/roomexpense_logo_centered.svg"
+          alt="RoomBook"
+          style={{ width: "40px", height: "40px", borderRadius: "10px" }}
+        />
+        <div style={{ fontSize: "24px", fontWeight: "700", color: "#0f172a" }}>
+          RoomBook
+        </div>
+      </div>
       <div style={styles.totalCard}>
         <div style={styles.totalLabel}>Total Expenses</div>
         <div style={styles.totalAmount}>
