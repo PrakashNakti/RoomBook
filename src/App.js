@@ -8,6 +8,7 @@ import {
   orderBy,
   doc,
   updateDoc,
+  deleteDoc,
 } from "firebase/firestore";
 
 function App() {
@@ -50,7 +51,7 @@ function App() {
   }, []);
 
   const activeRoommates = roommates.filter((r) => r.active);
-  const currentUser = activeRoommates[0]?.name || "You";
+  //const currentUser = activeRoommates[0]?.name || "You";
 
   const categories = [
     { name: "Rent", icon: "🏠", color: "#6366f1" },
@@ -158,6 +159,16 @@ function App() {
     setSaving(false);
   };
 
+  const deleteExpense = async (id) => {
+    if (!window.confirm("Delete this expense?")) return;
+    try {
+      await deleteDoc(doc(db, "expenses", id));
+      alert("Expense deleted!");
+    } catch (error) {
+      console.error("Error deleting expense:", error);
+      alert("Error: " + error.message);
+    }
+  };
   // History Logic
   const filteredExpenses = expenses.filter((exp) => {
     if (paidByFilter === "All") return true;
@@ -507,7 +518,7 @@ function App() {
         }}
       >
         <img
-          src="/roomexpense_logo_centered.svg"
+          src="/roomexpense_logo_centered.png"
           alt="RoomBook"
           style={{ width: "40px", height: "40px", borderRadius: "10px" }}
         />
@@ -532,26 +543,46 @@ function App() {
       <div style={styles.balanceRow}>
         <div style={styles.balanceCard}>
           <div style={styles.balanceLabel}>Rent</div>
-          <input
-            type="number"
-            style={{ ...styles.balanceInput, color: "#6366f1" }}
-            value={rentAmount}
-            onChange={(e) => setRentAmount(parseFloat(e.target.value) || 0)}
-          />
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <span
+              style={{ fontSize: "20px", fontWeight: "700", color: "#6366f1" }}
+            >
+              ₹
+            </span>
+            <input
+              type="text"
+              style={{ ...styles.balanceInput, color: "#6366f1" }}
+              value={rentAmount.toLocaleString("en-IN")}
+              onChange={(e) => {
+                const val = e.target.value.replace(/,/g, ""); // remove commas
+                setRentAmount(parseFloat(val) || 0);
+              }}
+            />
+          </div>
           <div style={styles.balancePerson}>This Month</div>
         </div>
+
         <div style={styles.balanceCard}>
           <div style={styles.balanceLabel}>Water</div>
-          <input
-            type="number"
-            style={{ ...styles.balanceInput, color: "#10b981" }}
-            value={waterAmount}
-            onChange={(e) => setWaterAmount(parseFloat(e.target.value) || 0)}
-          />
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <span
+              style={{ fontSize: "20px", fontWeight: "700", color: "#10b981" }}
+            >
+              ₹
+            </span>
+            <input
+              type="text"
+              style={{ ...styles.balanceInput, color: "#10b981" }}
+              value={waterAmount.toLocaleString("en-IN")}
+              onChange={(e) => {
+                const val = e.target.value.replace(/,/g, ""); // remove commas
+                setWaterAmount(parseFloat(val) || 0);
+              }}
+            />
+          </div>
           <div style={styles.balancePerson}>This Month</div>
         </div>
       </div>
-
       <div style={styles.sectionHeader}>
         <div style={styles.sectionTitle}>Roommates</div>
         <button style={styles.addBtn} onClick={() => setShowAddRoommate(true)}>
@@ -617,22 +648,36 @@ function App() {
   const renderExpense = () => (
     <div style={styles.container}>
       <div style={styles.header}>
-        <span style={styles.backBtn} onClick={() => setActiveTab("dashboard")}>
+        {/* <span style={styles.backBtn} onClick={() => setActiveTab("dashboard")}>
           ←
-        </span>
+        </span> */}
         <div>Add Expense</div>
         <div style={{ width: "24px" }}></div>
       </div>
 
       <div style={styles.formCard}>
-        <label style={styles.label}>Amount (₹)</label>
+        <label style={styles.label}>Date</label>
         <input
           style={styles.input}
-          type="number"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="2500"
+          type="date"
+          value={expenseDate}
+          onChange={(e) => setExpenseDate(e.target.value)}
+          max={new Date().toISOString().split("T")[0]}
         />
+
+        <label style={styles.label}>Paid By</label>
+        <select
+          style={styles.select}
+          value={paidBy}
+          onChange={(e) => setPaidBy(e.target.value)}
+        >
+          <option value="">Select person</option>
+          {activeRoommates.map((r) => (
+            <option key={r.id} value={r.name}>
+              {r.name}
+            </option>
+          ))}
+        </select>
 
         <label style={styles.label}>Category</label>
         <div style={styles.categoryGrid}>
@@ -651,35 +696,21 @@ function App() {
           ))}
         </div>
 
-        <label style={styles.label}>Paid By</label>
-        <select
-          style={styles.select}
-          value={paidBy}
-          onChange={(e) => setPaidBy(e.target.value)}
-        >
-          <option value="">Select person</option>
-          {activeRoommates.map((r) => (
-            <option key={r.id} value={r.name}>
-              {r.name}
-            </option>
-          ))}
-        </select>
-
-        <label style={styles.label}>Date</label>
-        <input
-          style={styles.input}
-          type="date"
-          value={expenseDate}
-          onChange={(e) => setExpenseDate(e.target.value)}
-          max={new Date().toISOString().split("T")[0]}
-        />
-
         <label style={styles.label}>Description (Optional)</label>
         <input
           style={styles.input}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Bought groceries and snacks"
+        />
+
+        <label style={styles.label}>Amount (₹)</label>
+        <input
+          style={styles.input}
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="0"
         />
 
         <div style={styles.infoText}>
@@ -742,19 +773,46 @@ function App() {
               <div style={{ ...styles.expenseIcon, backgroundColor: bg }}>
                 {icon}
               </div>
-              <div style={styles.expenseInfo}>
-                <div style={styles.expenseTitle}>
-                  {exp.description.split(":")[0]}
-                </div>
+
+              <div style={{ ...styles.expenseInfo, flex: 1 }}>
+                {/* SHOW FULL DESCRIPTION LIKE DASHBOARD */}
+                <div style={styles.expenseTitle}>{exp.description}</div>
                 <div style={styles.expenseSub}>
                   Paid by {exp.paidBy} • Split: ₹{splitAmt.toFixed(0)} each
                 </div>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={styles.expenseAmount}>
-                  ₹{exp.amount.toLocaleString("en-IN")}
+
+              {/* RIGHT SIDE: Amount + Date + Delete in 1 row */}
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "10px" }}
+              >
+                <div style={{ textAlign: "right" }}>
+                  <div style={styles.expenseAmount}>
+                    ₹{exp.amount.toLocaleString("en-IN")}
+                  </div>
+                  <div style={styles.expenseSub}>{formatDate(exp.date)}</div>
                 </div>
-                <div style={styles.expenseSub}>{formatDate(exp.date)}</div>
+
+                {/* RED DELETE BUTTON */}
+                <button
+                  onClick={() => deleteExpense(exp.id)}
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "50%",
+                    backgroundColor: "#fef2f2",
+                    color: "#ef4444",
+                    border: "none",
+                    fontSize: "16px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  🗑️
+                </button>
               </div>
             </div>
           );
@@ -954,7 +1012,7 @@ function App() {
           onClick={() => setActiveTab("payment")}
         >
           <div style={styles.navIcon}>💳</div>
-          <div style={styles.navLabel}>Payment</div>
+          <div style={styles.navLabel}>Settlements</div>
         </div>
       </div>
     </div>
