@@ -935,8 +935,8 @@ function App() {
                 }
               >
                 {r.balance >= 0
-                  ? `Gets Back: +₹${r.balance.toFixed(2)}`
-                  : `Needs to Pay: ₹${Math.abs(r.balance).toFixed(2)}`}
+                  ? `Gets Back: +₹${r.balance.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : `Needs to Pay: ₹${Math.abs(r.balance).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
               </div>
             </div>
           </div>
