@@ -10,6 +10,7 @@ import {
   updateDoc,
   deleteDoc,
 } from "firebase/firestore";
+import { FiTrash2 } from "react-icons/fi";
 
 function App() {
   const [roommates, setRoommates] = useState([]);
@@ -25,6 +26,7 @@ function App() {
   // Editable Rent and Water
   const [rentAmount, setRentAmount] = useState(7000);
   const [waterAmount, setWaterAmount] = useState(200);
+  const [electricityAmount, setElectricityAmount] = useState(0);
 
   // Expense form state
   const [amount, setAmount] = useState("");
@@ -54,15 +56,14 @@ function App() {
   //const currentUser = activeRoommates[0]?.name || "You";
 
   const categories = [
-    { name: "Rent", icon: "🏠", color: "#6366f1" },
-    { name: "Electricity", icon: "⚡", color: "#f59e0b" },
     { name: "Grocery", icon: "🛒", color: "#10b981" },
     { name: "Others", icon: "⋯", color: "#6b7280" },
   ];
 
   // Total = Expenses + Rent + Water
   const otherExpensesTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const totalExpenses = otherExpensesTotal + rentAmount + waterAmount;
+  const totalExpenses =
+    otherExpensesTotal + rentAmount + waterAmount + electricityAmount;
 
   // PAYMENT CALCULATIONS
   const totalRoommates = activeRoommates.length;
@@ -80,6 +81,10 @@ function App() {
       balance,
     };
   });
+
+  const needsTotal = roommatePayments
+    .filter((r) => r.balance < 0) // only people who owe
+    .reduce((sum, r) => sum + Math.abs(r.balance), 0); // sum their negative balance
 
   const addRoommate = async () => {
     if (!newRoommate.trim()) return;
@@ -120,7 +125,9 @@ function App() {
     return { icon: "📦", bg: "#fffbeb" };
   };
 
-  const formatDate = (timestamp) => {
+  const formatDate = (timestamp, dateDisplay) => {
+    // use new field if exists, else fallback to old timestamp
+    if (dateDisplay) return dateDisplay;
     return new Date(timestamp).toLocaleDateString("en-IN", {
       month: "short",
       day: "numeric",
@@ -137,12 +144,23 @@ function App() {
     setSaving(true);
     try {
       const splitWith = activeRoommates.map((r) => r.name);
+      const selectedDate = new Date(expenseDate);
+
+      const dateForDisplay = selectedDate
+        .toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        })
+        .replace(/ /g, "-"); // "02 Jul 2026" -> "02-Jul-2026"
+
       await addDoc(collection(db, "expenses"), {
         amount: parseFloat(amount),
         description: category + (description ? `: ${description}` : ""),
         paidBy,
         splitWith,
-        date: new Date(expenseDate).getTime(),
+        date: selectedDate.getTime(), // keep this for sorting
+        dateDisplay: dateForDisplay, // "02-Jul-2026" for Firebase
         createdAt: Date.now(),
       });
       setAmount("");
@@ -582,6 +600,28 @@ function App() {
           </div>
           <div style={styles.balancePerson}>This Month</div>
         </div>
+
+        <div style={styles.balanceCard}>
+          <div style={styles.balanceLabel}>Electricity</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            {" "}
+            <span
+              style={{ fontSize: "20px", fontWeight: "700", color: "#10b981" }}
+            >
+              ₹
+            </span>
+            <input
+              type="text"
+              style={{ ...styles.balanceInput, color: "#10b981" }}
+              value={electricityAmount.toLocaleString("en-IN")}
+              onChange={(e) => {
+                const val = e.target.value.replace(/,/g, ""); // remove commas
+                setElectricityAmount(parseFloat(val) || 0);
+              }}
+            />
+          </div>
+          <div style={styles.balancePerson}>This Month</div>
+        </div>
       </div>
       <div style={styles.sectionHeader}>
         <div style={styles.sectionTitle}>Roommates</div>
@@ -605,7 +645,7 @@ function App() {
                 style={styles.removeIconBtn}
                 onClick={() => confirmDeleteRoommate(r.id, r.name)}
               >
-                🗑️
+                <FiTrash2 size={16} />
               </button>
             </div>
           ))
@@ -652,7 +692,7 @@ function App() {
           ←
         </span> */}
         <div>Add Expense</div>
-        <div style={{ width: "24px" }}></div>
+        <div>💰</div>
       </div>
 
       <div style={styles.formCard}>
@@ -737,7 +777,7 @@ function App() {
     <div style={styles.container}>
       <div style={styles.header}>
         <div style={styles.historyHeader}>History</div>
-        <div>🔽</div>
+        <div>📋</div>
       </div>
 
       <select
@@ -811,7 +851,7 @@ function App() {
                     flexShrink: 0,
                   }}
                 >
-                  🗑️
+                  <FiTrash2 size={16} />
                 </button>
               </div>
             </div>
@@ -821,12 +861,12 @@ function App() {
     </div>
   );
 
-  // NEW PAYMENT PAGE
+  // NEW SETTLEMENT PAGE
   const renderPayment = () => (
     <div style={styles.container}>
       <div style={styles.header}>
         <div style={styles.historyHeader}>Settlements</div>
-        <div>💰</div>
+        <div>💳</div>
       </div>
 
       {/* Summary Card */}
@@ -848,6 +888,12 @@ function App() {
           <div style={styles.paymentLabel}>Equal Share Per Person</div>
           <div style={styles.paymentValue}>
             ₹{equalShare.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+          </div>
+        </div>
+        <div style={styles.paymentRow}>
+          <div style={styles.paymentLabel}>Needs Total</div>
+          <div style={styles.paymentValue}>
+            ₹{needsTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
           </div>
         </div>
       </div>
