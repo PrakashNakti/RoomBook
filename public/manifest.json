@@ -1,6 +1,12 @@
 {
   "short_name": "RoomBook",
   "name": "RoomBook - Roommate Expense Tracker",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#5B5FFF",
+  "background_color": "#5B5FFF",
   "icons": [
     {
       "src": "favicon.ico",
@@ -8,20 +14,16 @@
       "type": "image/x-icon"
     },
     {
-      "src": "roomexpense_logo_centered192.png",
-      "type": "image/png",
+      "src": "RoomBook_AppLogo.png",
       "sizes": "192x192",
-      "purpose": "any maskable"  
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
-      "src": "roomexpense_logo_centered512.png",
-      "type": "image/png",
+      "src": "RoomBook_AppLogo.png",
       "sizes": "512x512",
-      "purpose": "any maskable"  
+      "type": "image/png",
+      "purpose": "maskable"
     }
-  ],
-  "start_url": ".",
-  "display": "standalone",
-  "theme_color": "#5B5FFF",     
-  "background_color": "#5B5FFF"
+  ]
 }
