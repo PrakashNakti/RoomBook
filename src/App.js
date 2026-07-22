@@ -536,7 +536,7 @@ function App() {
         }}
       >
         <img
-          src="/roomexpense_logo_centered.png"
+          src="/RoomBook_AppLogo.png"
           alt="RoomBook"
           style={{ width: "40px", height: "40px", borderRadius: "10px" }}
         />
