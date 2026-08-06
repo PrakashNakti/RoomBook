@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { db } from "./firebase";
 import {
   collection,
@@ -58,7 +58,6 @@ function App() {
       for (const expense of snap.docs) {
         const data = expense.data();
 
-        // Already migrated asel tar skip
         if (data.monthKey) continue;
 
         const expenseDate = new Date(data.date);
@@ -118,6 +117,55 @@ function App() {
     runMigration();
   }, []);
 
+  const initializeMonthlyBills = useCallback(async () => {
+    try {
+      const billRef = doc(db, "monthlyBills", selectedMonth);
+      const billSnap = await getDoc(billRef);
+
+      // Current month document already exists
+      if (billSnap.exists()) {
+        const bill = billSnap.data();
+
+        setRentAmount(bill.rent || 0);
+        setWaterAmount(bill.water || 0);
+        setElectricityAmount(bill.electricity || 0);
+
+        return;
+      }
+
+      // Previous Month
+      const current = new Date(selectedMonth + "-01");
+      current.setMonth(current.getMonth() - 1);
+
+      const previousMonthKey = `${current.getFullYear()}-${String(
+        current.getMonth() + 1,
+      ).padStart(2, "0")}`;
+
+      const previousRef = doc(db, "monthlyBills", previousMonthKey);
+      const previousSnap = await getDoc(previousRef);
+
+      let newBill = {
+        rent: 7000,
+        water: 200,
+        electricity: 0,
+      };
+
+      // Copy previous month values if available
+      if (previousSnap.exists()) {
+        newBill = previousSnap.data();
+      }
+
+      // Create current month document
+      await setDoc(billRef, newBill);
+
+      setRentAmount(newBill.rent);
+      setWaterAmount(newBill.water);
+      setElectricityAmount(newBill.electricity);
+    } catch (err) {
+      console.error("initializeMonthlyBills Error:", err);
+    }
+  }, [selectedMonth]);
+
   useEffect(() => {
     initializeMonthlyBills();
     const unsubRoommates = onSnapshot(collection(db, "roommates"), (snap) => {
@@ -154,7 +202,7 @@ function App() {
       unsubExpenses();
       unsubBills();
     };
-  }, [selectedMonth]);
+  }, [selectedMonth, initializeMonthlyBills]);
 
   const activeRoommates = roommates.filter((r) => r.active);
   //const currentUser = activeRoommates[0]?.name || "You";
@@ -236,93 +284,6 @@ function App() {
       month: "short",
       day: "numeric",
     });
-  };
-
-  // const initializeMonthlyBills = async () => {
-  //   const billRef = doc(db, "monthlyBills", selectedMonth);
-
-  //   const billSnap = await getDoc(billRef);
-
-  //   if (!billSnap.exists()) {
-  //     // Previous Month
-  //     const d = new Date(selectedMonth + "-01");
-  //     d.setMonth(d.getMonth() - 1);
-
-  //     const previousMonthKey = `${d.getFullYear()}-${String(
-  //       d.getMonth() + 1,
-  //     ).padStart(2, "0")}`;
-
-  //     const previousBillRef = doc(db, "monthlyBills", previousMonthKey);
-
-  //     const previousBillSnap = await getDoc(previousBillRef);
-
-  //     if (previousBillSnap.exists()) {
-  //       await setDoc(billRef, previousBillSnap.data());
-  //     } else {
-  //       await setDoc(billRef, {
-  //         rent: 7000,
-  //         water: 200,
-  //         electricity: 0,
-  //       });
-  //     }
-  //   }
-
-  //   const currentBill = await getDoc(billRef);
-
-  //   const bill = currentBill.data();
-
-  //   setRentAmount(bill.rent);
-  //   setWaterAmount(bill.water);
-  //   setElectricityAmount(bill.electricity);
-  // };
-
-  const initializeMonthlyBills = async () => {
-    try {
-      const billRef = doc(db, "monthlyBills", selectedMonth);
-      const billSnap = await getDoc(billRef);
-
-      // Current month document already exists
-      if (billSnap.exists()) {
-        const bill = billSnap.data();
-
-        setRentAmount(bill.rent || 0);
-        setWaterAmount(bill.water || 0);
-        setElectricityAmount(bill.electricity || 0);
-
-        return;
-      }
-
-      // Previous Month
-      const current = new Date(selectedMonth + "-01");
-      current.setMonth(current.getMonth() - 1);
-
-      const previousMonthKey = `${current.getFullYear()}-${String(
-        current.getMonth() + 1,
-      ).padStart(2, "0")}`;
-
-      const previousRef = doc(db, "monthlyBills", previousMonthKey);
-      const previousSnap = await getDoc(previousRef);
-
-      let newBill = {
-        rent: 7000,
-        water: 200,
-        electricity: 0,
-      };
-
-      // Copy previous month values if available
-      if (previousSnap.exists()) {
-        newBill = previousSnap.data();
-      }
-
-      // Create current month document
-      await setDoc(billRef, newBill);
-
-      setRentAmount(newBill.rent);
-      setWaterAmount(newBill.water);
-      setElectricityAmount(newBill.electricity);
-    } catch (err) {
-      console.error("initializeMonthlyBills Error:", err);
-    }
   };
 
   const saveExpense = async () => {
