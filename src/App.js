@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { db } from "./firebase";
 import {
   collection,
@@ -6,7 +6,11 @@ import {
   onSnapshot,
   query,
   orderBy,
+  where,
   doc,
+  getDoc,
+  getDocs,
+  setDoc,
   updateDoc,
   deleteDoc,
 } from "firebase/firestore";
@@ -24,8 +28,8 @@ function App() {
   const [paidByFilter, setPaidByFilter] = useState("All");
 
   // Editable Rent and Water
-  const [rentAmount, setRentAmount] = useState(7000);
-  const [waterAmount, setWaterAmount] = useState(200);
+  const [rentAmount, setRentAmount] = useState(0);
+  const [waterAmount, setWaterAmount] = useState(0);
   const [electricityAmount, setElectricityAmount] = useState(0);
 
   // Expense form state
@@ -37,20 +41,168 @@ function App() {
   );
   const [description, setDescription] = useState("");
 
+  // Current Month
+  const currentDate = new Date();
+
+  const currentMonthKey = `${currentDate.getFullYear()}-${String(
+    currentDate.getMonth() + 1,
+  ).padStart(2, "0")}`;
+
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
+  const [availableMonths, setAvailableMonths] = useState([]);
+
+  const migrateOldExpenses = async () => {
+    try {
+      const snap = await getDocs(collection(db, "expenses"));
+
+      for (const expense of snap.docs) {
+        const data = expense.data();
+
+        if (data.monthKey) continue;
+
+        const expenseDate = new Date(data.date);
+
+        const monthKey = `${expenseDate.getFullYear()}-${String(
+          expenseDate.getMonth() + 1,
+        ).padStart(2, "0")}`;
+
+        await updateDoc(doc(db, "expenses", expense.id), {
+          monthKey,
+        });
+      }
+
+      //alert("Migration Completed Successfully");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+  const migrateMonthlyBills = async () => {
+    try {
+      const expenseSnap = await getDocs(collection(db, "expenses"));
+
+      const months = [
+        ...new Set(
+          expenseSnap.docs.map((doc) => doc.data().monthKey).filter(Boolean),
+        ),
+      ];
+
+      for (const month of months) {
+        const billRef = doc(db, "monthlyBills", month);
+        const billSnap = await getDoc(billRef);
+
+        if (!billSnap.exists()) {
+          await setDoc(billRef, {
+            rent: 7000,
+            water: 200,
+            electricity: 0,
+          });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // useEffect(() => {
+  //   migrateOldExpenses();
+  //   migrateMonthlyBills();
+  // }, []);
+
   useEffect(() => {
+    const runMigration = async () => {
+      await migrateOldExpenses();
+      await migrateMonthlyBills();
+    };
+
+    runMigration();
+  }, []);
+
+  const initializeMonthlyBills = useCallback(async () => {
+    try {
+      const billRef = doc(db, "monthlyBills", selectedMonth);
+      const billSnap = await getDoc(billRef);
+
+      // Current month document already exists
+      if (billSnap.exists()) {
+        const bill = billSnap.data();
+
+        setRentAmount(bill.rent || 0);
+        setWaterAmount(bill.water || 0);
+        setElectricityAmount(bill.electricity || 0);
+
+        return;
+      }
+
+      // Previous Month
+      const current = new Date(selectedMonth + "-01");
+      current.setMonth(current.getMonth() - 1);
+
+      const previousMonthKey = `${current.getFullYear()}-${String(
+        current.getMonth() + 1,
+      ).padStart(2, "0")}`;
+
+      const previousRef = doc(db, "monthlyBills", previousMonthKey);
+      const previousSnap = await getDoc(previousRef);
+
+      let newBill = {
+        rent: 7000,
+        water: 200,
+        electricity: 0,
+      };
+
+      // Copy previous month values if available
+      if (previousSnap.exists()) {
+        newBill = previousSnap.data();
+      }
+
+      // Create current month document
+      await setDoc(billRef, newBill);
+
+      setRentAmount(newBill.rent);
+      setWaterAmount(newBill.water);
+      setElectricityAmount(newBill.electricity);
+    } catch (err) {
+      console.error("initializeMonthlyBills Error:", err);
+    }
+  }, [selectedMonth]);
+
+  useEffect(() => {
+    initializeMonthlyBills();
     const unsubRoommates = onSnapshot(collection(db, "roommates"), (snap) => {
+      debugger;
       const data = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setRoommates(data);
     });
-    const q = query(collection(db, "expenses"), orderBy("date", "desc"));
+
+    const q = query(
+      collection(db, "expenses"),
+      where("monthKey", "==", selectedMonth),
+      orderBy("date", "desc"),
+    );
+
     const unsubExpenses = onSnapshot(q, (snap) => {
-      setExpenses(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      const data = snap.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setExpenses(data);
+    });
+
+    const unsubBills = onSnapshot(collection(db, "monthlyBills"), (snap) => {
+      const months = snap.docs
+        .map((doc) => doc.id)
+        .sort()
+        .reverse();
+
+      setAvailableMonths(months);
     });
     return () => {
       unsubRoommates();
       unsubExpenses();
+      unsubBills();
     };
-  }, []);
+  }, [selectedMonth, initializeMonthlyBills]);
 
   const activeRoommates = roommates.filter((r) => r.active);
   //const currentUser = activeRoommates[0]?.name || "You";
@@ -159,8 +311,9 @@ function App() {
         description: category + (description ? `: ${description}` : ""),
         paidBy,
         splitWith,
-        date: selectedDate.getTime(), // keep this for sorting
-        dateDisplay: dateForDisplay, // "02-Jul-2026" for Firebase
+        date: selectedDate.getTime(),
+        dateDisplay: dateForDisplay,
+        monthKey: selectedMonth, // NEW
         createdAt: Date.now(),
       });
       setAmount("");
@@ -546,14 +699,35 @@ function App() {
       </div>
       <div style={styles.totalCard}>
         <div style={styles.totalLabel}>Total Expenses</div>
-        <div style={styles.totalAmount}>
-          ₹{totalExpenses.toLocaleString("en-IN")}
-        </div>
-        <div style={styles.totalLabel}>
+
+        {/* <div style={styles.totalLabel}>
           {new Date().toLocaleDateString("en-IN", {
             month: "long",
             year: "numeric",
           })}
+        </div> */}
+        <div style={{ marginTop: 10 }}>
+          <select
+            style={styles.select}
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+          >
+            {availableMonths.map((m) => {
+              const d = new Date(m + "-01");
+
+              return (
+                <option key={m} value={m}>
+                  {d.toLocaleDateString("en-IN", {
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+        <div style={styles.totalAmount}>
+          ₹{totalExpenses.toLocaleString("en-IN")}
         </div>
       </div>
 
@@ -571,9 +745,12 @@ function App() {
               type="text"
               style={{ ...styles.balanceInput, color: "#6366f1" }}
               value={rentAmount.toLocaleString("en-IN")}
-              onChange={(e) => {
-                const val = e.target.value.replace(/,/g, ""); // remove commas
-                setRentAmount(parseFloat(val) || 0);
+              onChange={async (e) => {
+                const val = parseFloat(e.target.value.replace(/,/g, "")) || 0;
+                setRentAmount(val);
+                await updateDoc(doc(db, "monthlyBills", selectedMonth), {
+                  rent: val,
+                });
               }}
             />
           </div>
@@ -592,9 +769,14 @@ function App() {
               type="text"
               style={{ ...styles.balanceInput, color: "#10b981" }}
               value={waterAmount.toLocaleString("en-IN")}
-              onChange={(e) => {
-                const val = e.target.value.replace(/,/g, ""); // remove commas
-                setWaterAmount(parseFloat(val) || 0);
+              onChange={async (e) => {
+                const val = parseFloat(e.target.value.replace(/,/g, "")) || 0;
+
+                setWaterAmount(val);
+
+                await updateDoc(doc(db, "monthlyBills", selectedMonth), {
+                  water: val,
+                });
               }}
             />
           </div>
@@ -614,9 +796,12 @@ function App() {
               type="text"
               style={{ ...styles.balanceInput, color: "#10b981" }}
               value={electricityAmount.toLocaleString("en-IN")}
-              onChange={(e) => {
-                const val = e.target.value.replace(/,/g, ""); // remove commas
-                setElectricityAmount(parseFloat(val) || 0);
+              onChange={async (e) => {
+                const val = parseFloat(e.target.value.replace(/,/g, "")) || 0;
+                setElectricityAmount(val);
+                await updateDoc(doc(db, "monthlyBills", selectedMonth), {
+                  electricity: val,
+                });
               }}
             />
           </div>
