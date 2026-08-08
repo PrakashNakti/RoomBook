@@ -166,6 +166,77 @@ function App() {
     }
   }, [selectedMonth]);
 
+  const cleanupPreviousMonth = async () => {
+    try {
+      const today = new Date();
+
+      if (today.getDate() < 10) {
+        return;
+      }
+
+      const currentMonthKey = `${today.getFullYear()}-${String(
+        today.getMonth() + 1,
+      ).padStart(2, "0")}`;
+
+      const cleanupRef = doc(db, "system", "cleanup");
+      const cleanupSnap = await getDoc(cleanupRef);
+
+      const lastCleanupMonth = cleanupSnap.exists()
+        ? cleanupSnap.data().lastCleanupMonth
+        : "";
+
+      if (lastCleanupMonth === currentMonthKey) {
+        console.log("Cleanup already completed:", currentMonthKey);
+        return;
+      }
+
+      const previous = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+
+      const previousMonthKey = `${previous.getFullYear()}-${String(
+        previous.getMonth() + 1,
+      ).padStart(2, "0")}`;
+
+      console.log("Cleaning previous month:", previousMonthKey);
+
+      const expenseQuery = query(
+        collection(db, "expenses"),
+        where("monthKey", "==", previousMonthKey),
+      );
+
+      const expenseSnap = await getDocs(expenseQuery);
+
+      for (const expense of expenseSnap.docs) {
+        await deleteDoc(expense.ref);
+      }
+
+      const billRef = doc(db, "monthlyBills", previousMonthKey);
+
+      const billSnap = await getDoc(billRef);
+
+      if (billSnap.exists()) {
+        await deleteDoc(billRef);
+      }
+
+      await setDoc(
+        cleanupRef,
+        {
+          lastCleanupMonth: currentMonthKey,
+          previousDeletedMonth: previousMonthKey,
+          cleanedAt: new Date(),
+        },
+        { merge: true },
+      );
+
+      console.log(`Cleanup completed successfully for ${previousMonthKey}`);
+    } catch (error) {
+      console.error("Cleanup Error:", error);
+    }
+  };
+
+  useEffect(() => {
+    cleanupPreviousMonth();
+  }, []);
+
   useEffect(() => {
     initializeMonthlyBills();
     const unsubRoommates = onSnapshot(collection(db, "roommates"), (snap) => {
